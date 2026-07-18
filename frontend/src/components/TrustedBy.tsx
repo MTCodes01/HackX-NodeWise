@@ -23,16 +23,21 @@ export default function TrustedBy() {
         </motion.p>
 
         <div className="trusted-logos">
-          {logos.map((logo) => {
-            console.log(logo.name, logo.icon);
-
-            return (
-              <div key={logo.name}>
-                <logo.icon size={40} color="red" />
-                <p>{logo.name}</p>
+          {logos.map((logo, i) => (
+            <motion.div
+              key={logo.name}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.1, duration: 0.5 }}
+              className="trusted-item"
+            >
+              <div className="trusted-icon-box">
+                <logo.icon size={24} className="trusted-icon" />
               </div>
-            );
-          })}
+              <span className="trusted-name">{logo.name}</span>
+            </motion.div>
+          ))}
         </div>
       </div>
     </section>

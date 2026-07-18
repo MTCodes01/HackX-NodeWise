@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import PageTransition from '../components/PageTransition'
 import DigitalTwinView from '../digital-twin/DigitalTwinView'
+import { useFactorySimulation } from '../simulation/factorySimulation'
 
 
 type NavItem = {
@@ -45,6 +46,33 @@ export default function Dashboard() {
   // Maintenance State
   const [createdWorkOrders, setCreatedWorkOrders] = useState<number[]>([])
   const [completedWorkOrders, setCompletedWorkOrders] = useState<string[]>([])
+
+  // Factory Twin Simulation State
+  const sim = useFactorySimulation()
+  const [hasOpenedTwin, setHasOpenedTwin] = useState(false)
+  const [energyHistory, setEnergyHistory] = useState<number[]>([54.0, 56.5, 58.0, 55.2, 57.4, 57.4])
+
+  useEffect(() => {
+    if (activeTab === 'twin') {
+      setHasOpenedTwin(true)
+    }
+  }, [activeTab])
+
+  useEffect(() => {
+    if (!hasOpenedTwin) return
+
+    // Calculate total power in kW from simulation
+    const totalPowerKw = Object.values(sim.state.machines).reduce((sum, m) => sum + m.powerKw, 0)
+
+    setEnergyHistory(prev => {
+      // Append to the list, keeping the last 6 items
+      const next = [...prev, totalPowerKw]
+      if (next.length > 6) {
+        next.shift()
+      }
+      return next
+    })
+  }, [sim.state.machines, hasOpenedTwin])
 
   // Dynamic Machinery Registry (Empty by default for fresh company setup)
   const [machinesList, setMachinesList] = useState<any[]>([])
@@ -210,7 +238,9 @@ export default function Dashboard() {
   const safetyIncidentsCount = anomalies.filter(a => a.domain === 'vision').length
   const liveOEE = incidents.some(i => i.priority === 'CRITICAL') ? '76.8%' :
                   incidents.some(i => i.priority === 'HIGH') ? '83.2%' : '87.4%'
-  const liveEnergy = anomalies.some(a => a.metric === 'power_kw') ? '1.41 MW' : '1.24 MW'
+  const liveEnergy = hasOpenedTwin && energyHistory.length > 0
+    ? `${energyHistory[energyHistory.length - 1].toFixed(1)} kW`
+    : (anomalies.some(a => a.metric === 'power_kw') ? '80.5 kW' : '57.4 kW')
 
   // Helper to map live telemetry into static machine cards
   function getLiveMachineState(mId: string, defaultVals: any) {
@@ -670,7 +700,7 @@ export default function Dashboard() {
                   transition={{ duration: 0.3 }}
                   style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%' }}
                 >
-                  <DigitalTwinView view={activeTab as 'twin' | 'logs'} liveIncidents={incidents} />
+                  <DigitalTwinView view={activeTab as 'twin' | 'logs'} liveIncidents={incidents} sharedState={sim} />
                 </motion.div>
               )}
 
@@ -772,127 +802,135 @@ export default function Dashboard() {
               )}
 
               {/* ===== ENERGY ===== */}
-              {activeTab === 'energy' && (
-                <motion.div
-                  key="energy"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="dashboard-grid"
-                >
-                  <div className="dashboard-stats-row">
-                    {[
-                      { label: 'Current Draw', value: liveEnergy, trend: anomalies.some(a => a.metric === 'power_kw') ? '+14.5%' : '-4.3%', color: '#f59e0b' },
-                      { label: 'Carbon Footprint (Daily)', value: '4.2 Tons', trend: '-12%', color: '#10b981' },
-                      { label: 'Cost Savings (MTD)', value: '$12,450', trend: '+8.1%', color: 'var(--accent-brand)' },
-                    ].filter(s => matchesSearch(s.label)).map((stat, i) => (
-                      <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="stat-card">
-                        <h4 className="stat-card-label">{stat.label}</h4>
-                        <div className="stat-card-value-row">
-                          <span className="stat-card-value" style={{ color: stat.color }}>{stat.value}</span>
-                          <span className="stat-card-trend">{stat.trend}</span>
+              {activeTab === 'energy' && (() => {
+                const energyPoints = energyHistory.map((val, idx) => {
+                  const cx = [0, 200, 400, 600, 800, 1000][idx]
+                  const cy = 300 - (val / 100.0) * 300
+                  return { cx, cy, val: `${val.toFixed(1)} kW` }
+                })
+                
+                const energyLinePath = `M${energyPoints[0].cx},${energyPoints[0].cy} ` +
+                  energyPoints.slice(1).map(pt => `L${pt.cx},${pt.cy}`).join(' ')
+
+                const energyFillPath = `M0,300 L${energyPoints[0].cx},${energyPoints[0].cy} ` +
+                  energyPoints.slice(1).map(pt => `L${pt.cx},${pt.cy}`).join(' ') +
+                  ` L1000,300 Z`
+
+                return (
+                  <motion.div
+                    key="energy"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="dashboard-grid"
+                  >
+                    <div className="dashboard-stats-row">
+                      {[
+                        { label: 'Current Draw', value: liveEnergy, trend: anomalies.some(a => a.metric === 'power_kw') ? '+14.5%' : '-4.3%', color: '#f59e0b' },
+                        { label: 'Carbon Footprint (Daily)', value: '4.2 Tons', trend: '-12%', color: '#10b981' },
+                        { label: 'Cost Savings (MTD)', value: '$12,450', trend: '+8.1%', color: 'var(--accent-brand)' },
+                      ].filter(s => matchesSearch(s.label)).map((stat, i) => (
+                        <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="stat-card">
+                          <h4 className="stat-card-label">{stat.label}</h4>
+                          <div className="stat-card-value-row">
+                            <span className="stat-card-value" style={{ color: stat.color }}>{stat.value}</span>
+                            <span className="stat-card-trend">{stat.trend}</span>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                    <div className="bento-card flex flex-col" style={{ minHeight: '450px' }}>
+                      <div className="bento-header">
+                        <h3>Energy Consumption (24h)</h3>
+                      </div>
+                      <div className="energy-chart-container" style={{ flex: 1, position: 'relative', marginTop: '1rem', display: 'flex', flexDirection: 'column' }}>
+
+                        {/* Y-Axis Labels (Absolute Positioning) */}
+                        <div style={{ position: 'absolute', left: 0, top: 0, bottom: '2rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 500 }}>
+                          <span>100 kW</span>
+                          <span>75 kW</span>
+                          <span>50 kW</span>
+                          <span>25 kW</span>
+                          <span>0 kW</span>
                         </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                  <div className="bento-card flex flex-col" style={{ minHeight: '450px' }}>
-                    <div className="bento-header">
-                      <h3>Energy Consumption (24h)</h3>
-                    </div>
-                    <div className="energy-chart-container" style={{ flex: 1, position: 'relative', marginTop: '1rem', display: 'flex', flexDirection: 'column' }}>
 
-                      {/* Y-Axis Labels (Absolute Positioning) */}
-                      <div style={{ position: 'absolute', left: 0, top: 0, bottom: '2rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 500 }}>
-                        <span>2.0 MW</span>
-                        <span>1.5 MW</span>
-                        <span>1.0 MW</span>
-                        <span>0.5 MW</span>
-                        <span>0 MW</span>
-                      </div>
+                        {/* SVG Chart */}
+                        <div style={{ flex: 1, marginLeft: '3rem', position: 'relative' }}>
+                          <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                            <defs>
+                              <linearGradient id="energyGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.4" />
+                                <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.01" />
+                              </linearGradient>
+                            </defs>
 
-                      {/* SVG Chart */}
-                      <div style={{ flex: 1, marginLeft: '3rem', position: 'relative' }}>
-                        <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
-                          <defs>
-                            <linearGradient id="energyGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.4" />
-                              <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.01" />
-                            </linearGradient>
-                          </defs>
-
-                          {/* Grid lines */}
-                          <g stroke="var(--border-color)" strokeWidth="1" strokeDasharray="4 4" opacity="0.5">
-                            <line x1="0" y1="0" x2="1000" y2="0" />
-                            <line x1="0" y1="75" x2="1000" y2="75" />
-                            <line x1="0" y1="150" x2="1000" y2="150" />
-                            <line x1="0" y1="225" x2="1000" y2="225" />
-                            <line x1="0" y1="300" x2="1000" y2="300" />
-                          </g>
-
-                          {/* Area Fill */}
-                          <motion.path
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 1, delay: 0.2 }}
-                            d="M0,300 L0,220 C150,180 250,260 400,150 C550,40 650,140 800,100 C900,70 950,50 1000,90 L1000,300 Z"
-                            fill="url(#energyGradient)"
-                          />
-
-                          {/* Line */}
-                          <motion.path
-                            initial={{ pathLength: 0, opacity: 0 }}
-                            animate={{ pathLength: 1, opacity: 1 }}
-                            transition={{ duration: 1.5, ease: "easeInOut" }}
-                            d="M0,220 C150,180 250,260 400,150 C550,40 650,140 800,100 C900,70 950,50 1000,90"
-                            fill="none"
-                            stroke="#f59e0b"
-                            strokeWidth="4"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            style={{ filter: 'drop-shadow(0px 4px 6px rgba(245, 158, 11, 0.3))' }}
-                          />
-
-                          {/* Data points */}
-                          {[
-                            { cx: 0, cy: 220, val: '0.8 MW' },
-                            { cx: 200, cy: 215, val: '0.9 MW' },
-                            { cx: 400, cy: 150, val: '1.4 MW' },
-                            { cx: 600, cy: 95, val: '1.8 MW' },
-                            { cx: 800, cy: 100, val: '1.7 MW' },
-                            { cx: 1000, cy: 90, val: '1.9 MW' }
-                          ].map((pt, i) => (
-                            <g key={i} className="chart-point-group" style={{ cursor: 'pointer' }}>
-                              <motion.circle
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                transition={{ delay: 1 + (i * 0.1), type: 'spring' }}
-                                cx={pt.cx} cy={pt.cy} r="6" fill="white" stroke="#f59e0b" strokeWidth="3"
-                              />
-                              {/* Hidden tooltip that shows on hover using CSS */}
-                              <g className="chart-tooltip" style={{ opacity: 0, transition: 'opacity 0.2s', pointerEvents: 'none' }}>
-                                <rect x={pt.cx - 35} y={pt.cy - 45} width="70" height="28" rx="4" fill="var(--text-main)" />
-                                <text x={pt.cx} y={pt.cy - 26} fill="var(--bg-primary)" fontSize="12" fontWeight="bold" textAnchor="middle">{pt.val}</text>
-                              </g>
+                            {/* Grid lines */}
+                            <g stroke="var(--border-color)" strokeWidth="1" strokeDasharray="4 4" opacity="0.5">
+                              <line x1="0" y1="0" x2="1000" y2="0" />
+                              <line x1="0" y1="75" x2="1000" y2="75" />
+                              <line x1="0" y1="150" x2="1000" y2="150" />
+                              <line x1="0" y1="225" x2="1000" y2="225" />
+                              <line x1="0" y1="300" x2="1000" y2="300" />
                             </g>
-                          ))}
-                        </svg>
-                      </div>
 
-                      {/* X-axis labels */}
-                      <div style={{ marginLeft: '3rem', display: 'flex', justifyContent: 'space-between', marginTop: '1rem', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 500 }}>
-                        <span>00:00</span>
-                        <span>04:00</span>
-                        <span>08:00</span>
-                        <span>12:00</span>
-                        <span>16:00</span>
-                        <span>20:00</span>
-                        <span>24:00</span>
+                            {/* Area Fill */}
+                            <motion.path
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ duration: 1, delay: 0.2 }}
+                              d={energyFillPath}
+                              fill="url(#energyGradient)"
+                            />
+
+                            {/* Line */}
+                            <motion.path
+                              initial={{ pathLength: 0, opacity: 0 }}
+                              animate={{ pathLength: 1, opacity: 1 }}
+                              transition={{ duration: 1.5, ease: "easeInOut" }}
+                              d={energyLinePath}
+                              fill="none"
+                              stroke="#f59e0b"
+                              strokeWidth="4"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              style={{ filter: 'drop-shadow(0px 4px 6px rgba(245, 158, 11, 0.3))' }}
+                            />
+
+                            {/* Data points */}
+                            {energyPoints.map((pt, i) => (
+                              <g key={i} className="chart-point-group" style={{ cursor: 'pointer' }}>
+                                <motion.circle
+                                  initial={{ scale: 0 }}
+                                  animate={{ scale: 1 }}
+                                  transition={{ delay: 1 + (i * 0.1), type: 'spring' }}
+                                  cx={pt.cx} cy={pt.cy} r="6" fill="white" stroke="#f59e0b" strokeWidth="3"
+                                />
+                                {/* Hidden tooltip that shows on hover using CSS */}
+                                <g className="chart-tooltip" style={{ opacity: 0, transition: 'opacity 0.2s', pointerEvents: 'none' }}>
+                                  <rect x={pt.cx - 35} y={pt.cy - 45} width="70" height="28" rx="4" fill="var(--text-main)" />
+                                  <text x={pt.cx} y={pt.cy - 26} fill="var(--bg-primary)" fontSize="12" fontWeight="bold" textAnchor="middle">{pt.val}</text>
+                                </g>
+                              </g>
+                            ))}
+                          </svg>
+                        </div>
+
+                        {/* X-axis labels */}
+                        <div style={{ marginLeft: '3rem', display: 'flex', justifyContent: 'space-between', marginTop: '1rem', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 500 }}>
+                          <span>00:00</span>
+                          <span>04:00</span>
+                          <span>08:00</span>
+                          <span>12:00</span>
+                          <span>16:00</span>
+                          <span>20:00</span>
+                          <span>24:00</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </motion.div>
-              )}
+                  </motion.div>
+                )
+              })()}
 
               {/* ===== SAFETY ===== */}
               {activeTab === 'safety' && (
