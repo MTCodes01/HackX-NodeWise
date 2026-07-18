@@ -3,12 +3,23 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
   LayoutDashboard, Activity, Shield, Zap, Wrench, 
-  Settings, LogOut, Bell, Search, Menu, X, ChevronRight, Cpu
+  Settings, LogOut, Bell, Search, Menu, X, ChevronRight, Cpu, MonitorSpeaker, ScrollText
 } from 'lucide-react'
 import PageTransition from '../components/PageTransition'
+import DigitalTwinView from '../digital-twin/DigitalTwinView'
 
-const sidebarNav = [
+
+type NavItem = {
+  icon: any;
+  label: string;
+  id: string;
+  href?: string;
+}
+
+const sidebarNav: NavItem[] = [
   { icon: LayoutDashboard, label: 'Overview', id: 'overview' },
+  { icon: MonitorSpeaker, label: 'Live Twin', id: 'twin' },
+  { icon: ScrollText, label: 'System Logs', id: 'logs' },
   { icon: Activity, label: 'Machines', id: 'machines' },
   { icon: Zap, label: 'Energy', id: 'energy' },
   { icon: Shield, label: 'Safety', id: 'safety' },
@@ -67,17 +78,28 @@ export default function Dashboard() {
 
               <nav className="sidebar-nav">
                 {sidebarNav.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveTab(item.id)}
-                    className={`sidebar-link ${activeTab === item.id ? 'active' : ''}`}
-                  >
-                    <item.icon size={18} />
-                    <span>{item.label}</span>
-                    {activeTab === item.id && (
-                      <motion.div layoutId="sidebar-active" className="sidebar-active-bg" />
-                    )}
-                  </button>
+                  item.href ? (
+                    <Link
+                      key={item.id}
+                      to={item.href}
+                      className="sidebar-link"
+                    >
+                      <item.icon size={18} />
+                      <span>{item.label}</span>
+                    </Link>
+                  ) : (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id)}
+                      className={`sidebar-link ${activeTab === item.id ? 'active' : ''}`}
+                    >
+                      <item.icon size={18} />
+                      <span>{item.label}</span>
+                      {activeTab === item.id && (
+                        <motion.div layoutId="sidebar-active" className="sidebar-active-bg" />
+                      )}
+                    </button>
+                  )
                 ))}
               </nav>
 
@@ -120,7 +142,7 @@ export default function Dashboard() {
             </div>
           </header>
 
-          <div className="dashboard-content-area">
+          <div className={`dashboard-content-area ${activeTab === 'twin' || activeTab === 'logs' ? 'no-padding' : ''}`}>
             <AnimatePresence mode="wait">
               {activeTab === 'overview' && (
                 <motion.div
@@ -227,6 +249,19 @@ export default function Dashboard() {
                       </div>
                     </motion.div>
                   </div>
+                </motion.div>
+              )}
+
+              {(activeTab === 'twin' || activeTab === 'logs') && (
+                <motion.div
+                  key="twin"
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.3 }}
+                  style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%' }}
+                >
+                  <DigitalTwinView view={activeTab as 'twin' | 'logs'} />
                 </motion.div>
               )}
 
