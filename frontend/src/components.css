@@ -1418,7 +1418,7 @@ main { flex: 1; }
 /* ===== DASHBOARD LAYOUT ===== */
 .dashboard-layout {
   position: relative;
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   background-color: var(--bg-primary);
   overflow: hidden;
@@ -1633,6 +1633,12 @@ main { flex: 1; }
   padding: 2rem;
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
+}
+
+.dashboard-content-area.no-padding {
+  padding: 0;
+  overflow-y: hidden;
 }
 
 .dashboard-grid {
