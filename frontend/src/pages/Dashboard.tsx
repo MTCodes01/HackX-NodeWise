@@ -929,10 +929,10 @@ export default function Dashboard() {
                       <p className="text-muted" style={{ fontSize: '0.875rem' }}>Real-time monitoring and image analysis for PPE compliance and hazard detection.</p>
                     </div>
                     <label className="btn-primary cursor-pointer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Upload size={16} /> Upload Image for Analysis
-                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => {
+                      <Upload size={16} /> Upload Video for Analysis
+                      <input type="file" accept="video/*" style={{ display: 'none' }} onChange={(e) => {
                         if (e.target.files && e.target.files.length > 0) {
-                          alert(`Image "${e.target.files[0].name}" uploaded for Safety CV Analysis! (Simulation)`)
+                          alert(`Video "${e.target.files[0].name}" uploaded for Safety CV Analysis! (Simulation)`)
                         }
                       }} />
                     </label>
