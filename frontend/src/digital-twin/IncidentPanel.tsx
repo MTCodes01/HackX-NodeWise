@@ -1,11 +1,13 @@
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertTriangle, CheckCircle, Clock } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Clock, Cpu, Brain, TrendingUp } from 'lucide-react'
 import CorrelationTimeline from './CorrelationTimeline'
 import AIRecommendationPanel from './AIRecommendationPanel'
 import type { SimulationState } from '../simulation/types'
 
 interface IncidentPanelProps {
   state: SimulationState
+  liveIncidents?: any[]
 }
 
 const PRIORITY_CONFIG = {
@@ -21,11 +23,52 @@ const STATUS_CONFIG = {
   resolved: { color: '#10b981', label: 'RESOLVED' },
 }
 
-export default function IncidentPanel({ state }: IncidentPanelProps) {
+export default function IncidentPanel({ 
+  state,
+  liveIncidents = []
+}: IncidentPanelProps) {
   const activeIncident = state.incidents.find(i => i.status !== 'resolved')
     ?? state.incidents[state.incidents.length - 1]
 
   const recommendation = activeIncident ? state.recommendations[activeIncident.id] : null
+
+  const [liveRecommendation, setLiveRecommendation] = useState<any | null>(null)
+  const [loadingLiveRecommendation, setLoadingLiveRecommendation] = useState(false)
+
+  useEffect(() => {
+    if (!activeIncident || !liveIncidents || liveIncidents.length === 0) {
+      setLiveRecommendation(null)
+      return
+    }
+
+    // Match backend incident by asset name (machine ID)
+    const matchingBackendIncident = liveIncidents.find(
+      (inc: any) => inc.asset.toLowerCase() === activeIncident.machineId.toLowerCase()
+    )
+
+    if (matchingBackendIncident) {
+      const fetchRecommendation = async () => {
+        setLoadingLiveRecommendation(true)
+        try {
+          const res = await fetch(`http://localhost:8000/api/recommendations/${matchingBackendIncident.incident_id}`)
+          if (res.ok) {
+            const data = await res.json()
+            setLiveRecommendation(data)
+          } else {
+            setLiveRecommendation(null)
+          }
+        } catch (e) {
+          console.error("Failed to load Gemini recommendation in IncidentPanel:", e)
+          setLiveRecommendation(null)
+        } finally {
+          setLoadingLiveRecommendation(false)
+        }
+      }
+      fetchRecommendation()
+    } else {
+      setLiveRecommendation(null)
+    }
+  }, [activeIncident, liveIncidents])
 
   return (
     <div className="incident-panel">
@@ -86,6 +129,37 @@ export default function IncidentPanel({ state }: IncidentPanelProps) {
                 </div>
               </div>
 
+              {/* Dynamic AI Explanation directly inside the incident card */}
+              {(loadingLiveRecommendation || liveRecommendation) && (
+                <div style={{ marginTop: '1rem', padding: '0.85rem', borderRadius: '0.5rem', background: 'rgba(139, 92, 246, 0.04)', border: '1px solid rgba(139, 92, 246, 0.15)', borderLeft: '3px solid #8b5cf6' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', fontWeight: 700, color: 'var(--accent-primary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
+                    <Brain size={12} style={{ color: '#8b5cf6' }} />
+                    <span>AI Real-time Diagnosis</span>
+                  </div>
+                  {loadingLiveRecommendation ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                        style={{ border: '2px solid rgba(255,255,255,0.1)', borderTop: '2px solid var(--accent-primary)', borderRadius: '50%', width: '10px', height: '10px' }}
+                      />
+                      <span>Analyzing telemetry drift...</span>
+                    </div>
+                  ) : (
+                    <div>
+                      <p style={{ margin: '0 0 0.4rem 0', fontSize: '0.82rem', color: 'var(--text-main)', lineHeight: '1.4' }}>
+                        {liveRecommendation.summary}
+                      </p>
+                      {liveRecommendation.operator_explanation && (
+                        <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                          <strong>Technical Cause:</strong> {liveRecommendation.operator_explanation}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Evidence — clearly labeled as algorithmic */}
               <div className="incident-evidence-header">
                 <span className="incident-evidence-title">Verified Evidence</span>
@@ -125,9 +199,73 @@ export default function IncidentPanel({ state }: IncidentPanelProps) {
             />
 
             {/* AI Recommendation */}
-            {recommendation && (
+            {loadingLiveRecommendation ? (
+              <div className="ai-rec-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                  style={{ border: '2px solid rgba(255,255,255,0.1)', borderTop: '2px solid var(--accent-primary)', borderRadius: '50%', width: '16px', height: '16px' }}
+                />
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Querying Gemini 3.5 Flash...</span>
+              </div>
+            ) : liveRecommendation ? (
+              <motion.div
+                className="ai-rec-panel"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <div className="ai-rec-header">
+                  <div className="ai-rec-icon-wrap" style={{ background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6' }}>
+                    <Brain size={14} />
+                  </div>
+                  <div>
+                    <div className="ai-rec-title">AI Live Predictive Analysis</div>
+                    <div className="ai-rec-source">Generated via ForgeMind AI Intelligence Layer</div>
+                  </div>
+                </div>
+
+                <div className="ai-rec-divider" />
+
+                <div className="ai-rec-section">
+                  <div className="ai-rec-section-label" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <Cpu size={11} />
+                    Probable Cause & Diagnosis
+                  </div>
+                  <p className="ai-rec-text">{liveRecommendation.summary}</p>
+                </div>
+
+                {liveRecommendation.operator_explanation && (
+                  <div className="ai-rec-section">
+                    <div className="ai-rec-section-label">Operator Explanation</div>
+                    <p className="ai-rec-text" style={{ fontSize: '0.80rem', color: 'var(--text-muted)', lineHeight: '1.45' }}>
+                      {liveRecommendation.operator_explanation}
+                    </p>
+                  </div>
+                )}
+
+                <div className="ai-rec-action-box">
+                  <div className="ai-rec-section-label" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <TrendingUp size={11} />
+                    Recommended Actions
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    {(liveRecommendation.recommended_actions || liveRecommendation.recommendedActions || []).map((act: any, idx: number) => (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.80rem', padding: '0.4rem 0.6rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
+                        <span style={{ color: 'var(--text-main)' }}>{act.action}</span>
+                        <span className="status-badge bg-brand-light text-brand" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}>{act.timeline}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="ai-rec-disclaimer">
+                  AI interpretation of algorithmically verified evidence. Not a substitute for qualified engineering judgment.
+                </div>
+              </motion.div>
+            ) : recommendation ? (
               <AIRecommendationPanel recommendation={recommendation} />
-            )}
+            ) : null}
           </motion.div>
         ) : (
           <motion.div

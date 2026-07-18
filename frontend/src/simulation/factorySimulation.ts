@@ -27,15 +27,15 @@ function makeEvent(category: FactoryEvent['category'], message: string, machineI
 }
 
 const INITIAL_STATE: SimulationState = {
-  machines: { ...MACHINE_MAP },  // Pre-seeded so telemetry starts ticking immediately
-  telemetryHistory: Object.fromEntries(Object.keys(MACHINE_MAP).map(id => [id, []])),
+  machines: {},  // Start empty so only user-imported machines show up
+  telemetryHistory: {},
   activeFaults: [],
   activeRecoveries: [],
   anomalies: [],
   correlations: [],
   incidents: [],
   recommendations: {},
-  eventLog: [makeEvent('system', 'Factory twin initialised with all machines online.')],
+  eventLog: [makeEvent('system', 'Factory twin initialized. All systems nominal.')],
   selectedMachineId: null,
   simulationSpeed: 1,
   isPaused: false,

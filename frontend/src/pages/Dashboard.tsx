@@ -176,14 +176,13 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [])
 
-  // Simulator Trigger Handlers
-  const handleTriggerScenario = async (scenario: string) => {
+  const handleTriggerScenario = async (scenario: string, machineId?: string) => {
     setSimulationRunning(true)
     try {
       const res = await fetch('http://localhost:8000/api/simulator/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenario })
+        body: JSON.stringify({ scenario, machine_id: machineId })
       })
       if (res.ok) {
         await fetchDashboardData()
@@ -369,58 +368,7 @@ export default function Dashboard() {
                 ))}
               </nav>
 
-              {/* Demo Simulator Widget */}
-              <div className="sidebar-simulator-panel" style={{ padding: '1rem', marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                <h5 style={{ color: 'var(--accent-primary)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>Demo Simulator</h5>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <button 
-                    disabled={simulationRunning}
-                    onClick={() => handleTriggerScenario('mechanical')}
-                    className="sidebar-link hover-bg-warning"
-                    style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem', display: 'flex', gap: '0.5rem', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px', textAlign: 'left', width: '100%', cursor: 'pointer' }}
-                  >
-                    <Activity size={14} style={{ color: '#fbbf24' }} />
-                    <span>Run Mechanical Wear</span>
-                  </button>
-                  <button 
-                    disabled={simulationRunning}
-                    onClick={() => handleTriggerScenario('safety')}
-                    className="sidebar-link hover-bg-danger"
-                    style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem', display: 'flex', gap: '0.5rem', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px', textAlign: 'left', width: '100%', cursor: 'pointer' }}
-                  >
-                    <Shield size={14} style={{ color: '#f87171' }} />
-                    <span>Run Safety Proximity</span>
-                  </button>
-                  <button 
-                    disabled={simulationRunning}
-                    onClick={() => handleTriggerScenario('false_spike')}
-                    className="sidebar-link hover-bg-info"
-                    style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem', display: 'flex', gap: '0.5rem', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px', textAlign: 'left', width: '100%', cursor: 'pointer' }}
-                  >
-                    <Bell size={14} style={{ color: '#22d3ee' }} />
-                    <span>Run False Spike</span>
-                  </button>
-                  <button 
-                    disabled={simulationRunning}
-                    onClick={handleReset}
-                    className="sidebar-link hover-bg-success"
-                    style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem', display: 'flex', gap: '0.5rem', background: 'rgba(52, 211, 153, 0.05)', border: '1px solid rgba(52, 211, 153, 0.1)', borderRadius: '6px', textAlign: 'left', width: '100%', marginTop: '0.25rem', color: '#6ee7b7', cursor: 'pointer' }}
-                  >
-                    <X size={14} />
-                    <span>Reset Data Simulator</span>
-                  </button>
-                </div>
-                {simulationRunning && (
-                  <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-                      style={{ border: '2px solid rgba(255,255,255,0.1)', borderTop: '2px solid var(--accent-primary)', borderRadius: '50%', width: '10px', height: '10px' }}
-                    />
-                    <span>Ingesting Telemetry Ticks...</span>
-                  </div>
-                )}
-              </div>
+
 
               <div className="sidebar-footer">
                 <button className="sidebar-link" onClick={() => setActiveTab('settings')}>
@@ -705,7 +653,7 @@ export default function Dashboard() {
                   transition={{ duration: 0.3 }}
                   style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%' }}
                 >
-                  <DigitalTwinView view={activeTab as 'twin' | 'logs'} liveIncidents={incidents} companyMachines={machinesList} liveAnomalies={anomalies} />
+                  <DigitalTwinView view={activeTab as 'twin' | 'logs'} liveIncidents={incidents} companyMachines={machinesList} liveAnomalies={anomalies} onTriggerScenario={handleTriggerScenario} onResetSimulator={handleReset} />
                 </motion.div>
               )}
 

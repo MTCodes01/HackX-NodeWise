@@ -293,15 +293,17 @@ def trigger_simulator(payload: Dict[str, str]):
     1. mechanical
     2. safety
     3. false_spike
+    Optionally pass a 'machine_id' (e.g. 'CNC-04') in the payload.
     """
     scenario = payload.get("scenario", "").lower()
+    machine_id = payload.get("machine_id", "CNC-04")
     
     if scenario == "mechanical":
-        return run_mechanical_scenario()
+        return run_mechanical_scenario(machine_id)
     elif scenario == "safety":
-        return run_safety_scenario()
+        return run_safety_scenario(machine_id)
     elif scenario == "false_spike":
-        return run_false_spike_scenario()
+        return run_false_spike_scenario(machine_id)
     else:
         raise HTTPException(
             status_code=400,

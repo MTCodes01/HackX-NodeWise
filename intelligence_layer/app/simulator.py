@@ -82,13 +82,11 @@ def _generate_recommendations_for_active_incidents():
             db.recommendations[inc.incident_id] = generate_operator_recommendation(inc)
 
 
-def run_mechanical_scenario() -> Dict[str, Any]:
+def run_mechanical_scenario(machine_id: str = "CNC-04") -> Dict[str, Any]:
     """
     Scenario 1: Gradual mechanical wear.
     Vibration & temperature rise, power increases.
     """
-    db.clear()
-    
     ticks = 15
     all_new_anomalies = []
     
@@ -120,7 +118,7 @@ def run_mechanical_scenario() -> Dict[str, Any]:
             
         machine_tick = {
             "timestamp": timestamp,
-            "machine_id": "CNC-04",
+            "machine_id": machine_id,
             "line_id": "LINE-A",
             "vibration": float(vib),
             "temperature": float(temp),
@@ -130,7 +128,7 @@ def run_mechanical_scenario() -> Dict[str, Any]:
         
         energy_tick = {
             "timestamp": timestamp,
-            "meter_id": "METER-CNC04",
+            "meter_id": f"METER-{machine_id.upper()}",
             "line_id": "LINE-A",
             "power_kw": float(power),
             "energy_kwh": 4820.0 + (i * 0.8),
@@ -150,12 +148,10 @@ def run_mechanical_scenario() -> Dict[str, Any]:
         "recommendations": {k: v.model_dump() for k, v in db.recommendations.items()}
     }
 
-def run_safety_scenario() -> Dict[str, Any]:
+def run_safety_scenario(machine_id: str = "CNC-04") -> Dict[str, Any]:
     """
     Scenario 2: Mechanical degradation coupled with restricted zone entry.
     """
-    db.clear()
-    
     ticks = 15
     
     for i in range(ticks):
@@ -183,7 +179,7 @@ def run_safety_scenario() -> Dict[str, Any]:
             
         machine_tick = {
             "timestamp": timestamp,
-            "machine_id": "CNC-04",
+            "machine_id": machine_id,
             "line_id": "LINE-A",
             "vibration": float(vib),
             "temperature": float(temp),
@@ -193,7 +189,7 @@ def run_safety_scenario() -> Dict[str, Any]:
         
         energy_tick = {
             "timestamp": timestamp,
-            "meter_id": "METER-CNC04",
+            "meter_id": f"METER-{machine_id.upper()}",
             "line_id": "LINE-A",
             "power_kw": float(power),
             "energy_kwh": 4820.0 + (i * 0.8),
@@ -208,7 +204,7 @@ def run_safety_scenario() -> Dict[str, Any]:
                 "timestamp": timestamp,
                 "camera_id": "CAM-01",
                 "line_id": "LINE-A",
-                "nearby_machine_id": "CNC-04",
+                "nearby_machine_id": machine_id,
                 "event_type": "restricted_zone_proximity",
                 "confidence": 0.92,
                 "severity": "high"
@@ -225,13 +221,11 @@ def run_safety_scenario() -> Dict[str, Any]:
         "recommendations": {k: v.model_dump() for k, v in db.recommendations.items()}
     }
 
-def run_false_spike_scenario() -> Dict[str, Any]:
+def run_false_spike_scenario(machine_id: str = "CNC-04") -> Dict[str, Any]:
     """
     Scenario 3: Single vibration spike that does NOT persist.
     Should NOT generate a high-priority incident (proves filtering).
     """
-    db.clear()
-    
     ticks = 10
     
     for i in range(ticks):
@@ -251,7 +245,7 @@ def run_false_spike_scenario() -> Dict[str, Any]:
             
         machine_tick = {
             "timestamp": timestamp,
-            "machine_id": "CNC-04",
+            "machine_id": machine_id,
             "line_id": "LINE-A",
             "vibration": float(vib),
             "temperature": float(temp),
@@ -261,7 +255,7 @@ def run_false_spike_scenario() -> Dict[str, Any]:
         
         energy_tick = {
             "timestamp": timestamp,
-            "meter_id": "METER-CNC04",
+            "meter_id": f"METER-{machine_id.upper()}",
             "line_id": "LINE-A",
             "power_kw": float(power),
             "energy_kwh": 4820.0 + (i * 0.8),
@@ -271,11 +265,6 @@ def run_false_spike_scenario() -> Dict[str, Any]:
         
         simulate_tick(machine_tick, energy_tick)
         
-    # Standalone high anomalies could wrap into low-correlation incidents depending on severity.
-    # But since it didn't persist, check that it didn't trigger multiple alarms.
-    # Note: A single tick spike might create a minor incident or no persistent incident.
-    # In our correlation engine, standalone high severity anomalies are created as separate low correlation incidents,
-    # but we can verify their priority, counts, etc.
     _generate_recommendations_for_active_incidents()
     return {
         "status": "completed",

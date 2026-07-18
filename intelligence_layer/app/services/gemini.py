@@ -143,38 +143,49 @@ def generate_operator_recommendation(incident: UnifiedIncident) -> OperatorRecom
         return get_deterministic_fallback(incident)
 
     try:
-        # Define the system instructions and prompt
         system_instruction = (
-            "You are the ForgeMind AI Root-Cause Analyst.\n"
-            "You will receive a verified Unified Incident JSON object from the factory floor.\n"
-            "The verified_evidence in the incident is immutable ground truth. Do not invent "
-            "any sensor evidence or change the anomaly status.\n"
-            "Explain likely operational meaning, suggest probable causes as hypotheses, "
-            "recommend actions with a timeline, and estimate the potential impact.\n"
-            "Return a JSON object that adheres strictly to the OperatorRecommendation schema."
+            "You are the ForgeMind AI Root-Cause Analyst for an industrial IoT platform.\n"
+            "You receive a verified Unified Incident JSON from a factory floor sensor network.\n"
+            "The verified_evidence contains immutable ground-truth anomaly readings. Do NOT invent sensor data.\n"
+            "Your job: analyze the evidence, identify probable root causes with confidence levels, "
+            "recommend prioritized corrective actions with timelines, write a plain-language operator explanation, "
+            "estimate the business/safety impact, and note limitations.\n\n"
+            "Return ONLY a valid JSON object with exactly these snake_case fields:\n"
+            "{\n"
+            '  "incident_id": "<string>",\n'
+            '  "summary": "<1-2 sentence plain English summary of the problem>",\n'
+            '  "probable_causes": [\n'
+            '    {"cause": "<root cause description>", "confidence": "high|medium|low", "basis": ["<evidence metric>"]}\n'
+            '  ],\n'
+            '  "recommended_actions": [\n'
+            '    {"action": "<specific corrective action>", "timeline": "<e.g. Immediate / Within 2 hours>"}\n'
+            '  ],\n'
+            '  "operator_explanation": "<technical explanation for maintenance engineer>",\n'
+            '  "estimated_impact": "<production/safety impact if issue not addressed>",\n'
+            '  "limitations": "<what this analysis cannot determine without physical inspection>"\n'
+            "}"
         )
 
-        prompt = f"Analyze the following Unified Incident:\n{json.dumps(incident.model_dump(), indent=2)}"
+        prompt = (
+            f"Analyze this factory floor incident and return the JSON recommendation:\n\n"
+            f"{json.dumps(incident.model_dump(), indent=2)}"
+        )
 
-        # Instantiate Gemini model
         model = genai.GenerativeModel(
-            model_name="gemini-3.5-flash",
+            model_name="models/gemini-2.5-flash",
             system_instruction=system_instruction
         )
 
-        # We configure structured JSON output using the Pydantic model
-        # Note: google-generativeai supports response_schema directly.
-        # It takes either a Pydantic model or a dictionary representing the schema.
         response = model.generate_content(
             prompt,
             generation_config={
                 "response_mime_type": "application/json",
-                "response_schema": OperatorRecommendation
             }
         )
 
-        # Parse output
         result_json = json.loads(response.text)
+        # Ensure incident_id is set from the incident
+        result_json["incident_id"] = incident.incident_id
         return OperatorRecommendation(**result_json)
 
     except Exception as e:
