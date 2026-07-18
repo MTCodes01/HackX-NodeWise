@@ -33,7 +33,11 @@ export default function TrustedBy() {
               className="trusted-item"
             >
               <div className="trusted-icon-box card">
-                <logo.icon size={24} className="trusted-icon" />
+                <logo.icon
+                  size={28}
+                  color="var(--text-main)"
+                  strokeWidth={2}
+                />
               </div>
               <span className="trusted-name">{logo.name}</span>
             </motion.div>

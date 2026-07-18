@@ -38,7 +38,7 @@ export default function Navbar() {
               <div className="logo-icon-glow group-hover-glow" />
             </div>
             <span className="logo-text">
-              Forge<span className="text-brand">Mind</span>
+              <span className="text-brand">Optimus</span>
               <span className="logo-badge">AI</span>
             </span>
           </Link>

@@ -45,7 +45,7 @@ export default function Footer() {
                 </div>
               </div>
               <span className="logo-text">
-                Forge<span className="text-brand">Mind</span>
+                <span className="text-brand">Optimus</span>
                 <span className="logo-badge">AI</span>
               </span>
             </Link>
