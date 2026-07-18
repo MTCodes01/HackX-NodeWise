@@ -9,6 +9,10 @@ class InMemoryDB:
         self.anomalies: List[AnomalyEvidence] = []
         self.incidents: List[UnifiedIncident] = []
         self.recommendations: Dict[str, OperatorRecommendation] = {}
+        # Persistent UI State
+        self.ui_machines: List[Dict[str, Any]] = []
+        self.ui_created_work_orders: List[int] = []
+        self.ui_completed_work_orders: List[str] = []
 
     def clear(self):
         """Reset all data in the database (useful for running clean demo scenarios)."""
@@ -18,6 +22,9 @@ class InMemoryDB:
         self.anomalies.clear()
         self.incidents.clear()
         self.recommendations.clear()
+        self.ui_machines.clear()
+        self.ui_created_work_orders.clear()
+        self.ui_completed_work_orders.clear()
 
     def add_machine_telemetry(self, telemetry: MachineTelemetry):
         m_id = telemetry.machine_id

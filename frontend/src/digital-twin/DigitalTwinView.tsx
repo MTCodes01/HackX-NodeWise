@@ -31,6 +31,7 @@ interface DigitalTwinViewProps {
   liveAnomalies?: any[]     // live backend anomalies to overlay on the twin
   onTriggerScenario?: (scenario: string, machineId?: string) => Promise<void>
   onResetSimulator?: () => Promise<void>
+  onMachineAdded?: (machine: any) => Promise<void>
 }
 
 export default function DigitalTwinView({ 
@@ -39,7 +40,8 @@ export default function DigitalTwinView({
   companyMachines = [], 
   liveAnomalies = [],
   onTriggerScenario,
-  onResetSimulator
+  onResetSimulator,
+  onMachineAdded
 }: DigitalTwinViewProps) {
   const [rightPanel, setRightPanel] = useState<'details' | 'incidents'>('details')
 
@@ -69,7 +71,7 @@ export default function DigitalTwinView({
     } else {
       setTwinRecommendation(null)
     }
-  }, [activeLiveIncident])
+  }, [activeLiveIncident?.incident_id])
 
   const {
     state,
@@ -163,7 +165,7 @@ export default function DigitalTwinView({
     setRightPanel('details')
   }
 
-  const hasActiveIncident = state.incidents.some(i => i.status !== 'resolved')
+  const hasActiveIncident = liveIncidents && liveIncidents.length > 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
@@ -214,7 +216,20 @@ export default function DigitalTwinView({
                 state={state}
                 onSelectMachine={handleSelectMachine}
                 onDropFault={handleDropFault}
-                onAddMachine={addMachine}
+                onAddMachine={(name, type, line, gridIndex) => {
+                  const newId = `${type.toUpperCase()}-${Math.floor(Math.random() * 10000)}`
+                  addMachine(name, type, line, gridIndex, newId)
+                  if (onMachineAdded) {
+                    onMachineAdded({
+                      id: newId,
+                      name: name || newId,
+                      status: 'Online',
+                      temp: '40°C',
+                      vib: '0.4mm/s',
+                      util: 90
+                    })
+                  }
+                }}
               />
 
               {/* Center Overlay for Details & Incidents */}

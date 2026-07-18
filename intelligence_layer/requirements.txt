@@ -8,3 +8,4 @@ opencv-python-headless==4.10.0.84
 ultralytics==8.2.32
 pydantic==2.7.4
 python-dotenv==1.0.1
+websockets>=10.4

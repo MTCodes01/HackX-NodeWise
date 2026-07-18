@@ -269,7 +269,7 @@
 .incident-evidence-header { display: flex; align-items: center; justify-content: space-between; padding: 0.625rem 1rem; border-top: 1px solid var(--border-color-light); background: var(--bg-secondary); }
 .incident-evidence-title { font-size: 0.6875rem; font-weight: 700; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.04em; }
 .incident-algorithmic-badge { font-size: 0.5625rem; font-weight: 600; color: #64748b; background: rgba(100,116,139,0.1); padding: 0.125rem 0.5rem; border-radius: 9999px; }
-.incident-evidence-list { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem 1rem; }
+.incident-evidence-list { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem 1rem; max-height: 250px; overflow-y: auto; }
 .incident-evidence-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .incident-evidence-meta { display: flex; align-items: center; gap: 0.375rem; flex: 1; }
 .incident-evidence-domain { font-size: 0.5625rem; font-weight: 700; padding: 0.125rem 0.375rem; border-radius: 4px; white-space: nowrap; }

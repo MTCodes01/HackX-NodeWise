@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query, WebSocket, WebSocketDisconnect
+import json
+import asyncio
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
 
@@ -42,9 +44,92 @@ def read_root():
             "anomalies": "/api/anomalies",
             "incidents": "/api/incidents",
             "recommendation": "/api/recommendations/{incident_id}",
-            "trigger_simulator": "/api/simulator/trigger"
+            "trigger_simulator": "/api/simulator/trigger",
+            "ws_telemetry": "/ws/telemetry"
         }
     }
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                pass
+
+manager = ConnectionManager()
+
+@app.websocket("/ws/telemetry")
+async def websocket_telemetry(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            payload_type = data.get("type")
+            payload = data.get("payload")
+            
+            if payload_type == "machine":
+                telemetry = MachineTelemetry(**payload)
+                data_dict = telemetry.model_dump()
+                latest_energy_list = [h[-1] for h in db.energy_history.values() if h]
+                if latest_energy_list:
+                    matching = [e for e in latest_energy_list if e.line_id == telemetry.line_id]
+                    energy_data = (matching[0] if matching else latest_energy_list[0]).model_dump()
+                else:
+                    energy_data = {
+                        "timestamp": telemetry.timestamp,
+                        "meter_id": f"METER-{telemetry.machine_id}",
+                        "line_id": telemetry.line_id,
+                        "power_kw": 95.0,
+                        "energy_kwh": 1000.0,
+                        "current": 12.0,
+                        "baseline_power": 95.0
+                    }
+                simulate_tick(data_dict, energy_data)
+                
+            elif payload_type == "energy":
+                telemetry = EnergyTelemetry(**payload)
+                data_dict = telemetry.model_dump()
+                latest_machine_list = [h[-1] for h in db.machine_history.values() if h]
+                if latest_machine_list:
+                    matching = [m for m in latest_machine_list if m.line_id == telemetry.line_id]
+                    machine_data = (matching[0] if matching else latest_machine_list[0]).model_dump()
+                else:
+                    machine_data = {
+                        "timestamp": telemetry.timestamp,
+                        "machine_id": "UNKNOWN",
+                        "line_id": telemetry.line_id,
+                        "vibration": 1.8,
+                        "temperature": 36.5,
+                        "rpm": 1200.0,
+                        "status": "OPERATIONAL"
+                    }
+                simulate_tick(machine_data, data_dict)
+            
+            # Broadcast the full DB state back to the client
+            # The dashboard expects anomalies and incidents
+            await websocket.send_json({
+                "type": "update",
+                "anomalies": [a.model_dump() for a in db.anomalies],
+                "incidents": [i.model_dump() for i in db.incidents]
+            })
+            
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        print(f"WS Error: {e}")
+        manager.disconnect(websocket)
 
 @app.post("/api/ingest/machine", response_model=Dict[str, Any])
 def ingest_machine(telemetry: MachineTelemetry):
@@ -315,3 +400,29 @@ def reset_simulator():
     """Clears the in-memory database history, anomalies, and incidents."""
     db.clear()
     return {"status": "success", "message": "In-memory database reset successfully."}
+
+@app.get("/api/system/state", response_model=Dict[str, Any])
+def get_system_state():
+    """Returns the persistent UI state."""
+    return {
+        "machines": db.ui_machines,
+        "created_work_orders": db.ui_created_work_orders,
+        "completed_work_orders": db.ui_completed_work_orders
+    }
+
+@app.post("/api/machines", response_model=Dict[str, Any])
+def add_machine(machine: Dict[str, Any]):
+    """Registers a new machine in the UI state."""
+    db.ui_machines.append(machine)
+    return {"status": "success", "machine": machine}
+
+@app.post("/api/maintenance/work-order", response_model=Dict[str, Any])
+def handle_work_order(payload: Dict[str, Any]):
+    """Handles creating or completing a work order."""
+    action = payload.get("action")
+    data = payload.get("data")
+    if action == "create":
+        db.ui_created_work_orders.append(data)
+    elif action == "complete":
+        db.ui_completed_work_orders.append(data)
+    return {"status": "success"}

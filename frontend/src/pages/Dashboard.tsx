@@ -9,7 +9,7 @@ import {
 import PageTransition from '../components/PageTransition'
 import DigitalTwinView from '../digital-twin/DigitalTwinView'
 import { useFactorySimulation } from '../simulation/factorySimulation'
-
+import { TelemetrySocket, getSystemState, registerMachine, logWorkOrder } from '../services/factoryApi'
 
 type NavItem = {
   icon: any;
@@ -78,7 +78,7 @@ export default function Dashboard() {
   const [newMachineTemp, setNewMachineTemp] = useState('40°C')
   const [newMachineVib, setNewMachineVib] = useState('0.4mm/s')
 
-  const handleAddMachine = (e: React.FormEvent) => {
+  const handleAddMachine = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newMachineId || !newMachineName) return
 
@@ -97,13 +97,24 @@ export default function Dashboard() {
       util: Number(newMachineUtil) || 90
     }
 
-    setMachinesList([...machinesList, newMachine])
+    const success = await registerMachine(newMachine)
+    if (success) {
+      setMachinesList([...machinesList, newMachine])
+    }
     setNewMachineId('')
     setNewMachineName('')
     setNewMachineUtil(90)
     setNewMachineTemp('40°C')
     setNewMachineVib('0.4mm/s')
     setShowAddMachineModal(false)
+  }
+
+  const handleExternalAddMachine = async (newMachine: any) => {
+    if (machinesList.some(m => m.id.toLowerCase() === newMachine.id.toLowerCase())) return
+    const success = await registerMachine(newMachine)
+    if (success) {
+      setMachinesList(prev => [...prev, newMachine])
+    }
   }
 
   // Dynamic alert classification helper
@@ -151,8 +162,16 @@ export default function Dashboard() {
   const [simulationRunning, setSimulationRunning] = useState(false)
 
   // Fetch live anomalies and incidents from FastAPI backend
+  // Fetch live anomalies and incidents initially, then rely on WebSocket for live updates
   const fetchDashboardData = async () => {
     try {
+      const systemState = await getSystemState()
+      if (systemState) {
+        setMachinesList(systemState.machines || [])
+        setCreatedWorkOrders(systemState.created_work_orders || [])
+        setCompletedWorkOrders(systemState.completed_work_orders || [])
+      }
+
       const anomRes = await fetch('http://localhost:8000/api/anomalies')
       const incRes = await fetch('http://localhost:8000/api/incidents')
       if (anomRes.ok && incRes.ok) {
@@ -172,8 +191,20 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData()
-    const interval = setInterval(fetchDashboardData, 4000) // Poll every 4 seconds
-    return () => clearInterval(interval)
+
+    // Ensure connection is established
+    TelemetrySocket.connect()
+
+    // Subscribe to real-time updates
+    const unsubscribe = TelemetrySocket.onUpdate((data) => {
+      setAnomalies(data.anomalies)
+      setIncidents(data.incidents)
+      setSyncActive(true)
+    })
+
+    return () => {
+      unsubscribe()
+    }
   }, [])
 
   const handleTriggerScenario = async (scenario: string, machineId?: string) => {
@@ -653,7 +684,7 @@ export default function Dashboard() {
                   transition={{ duration: 0.3 }}
                   style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%' }}
                 >
-                  <DigitalTwinView view={activeTab as 'twin' | 'logs'} liveIncidents={incidents} companyMachines={machinesList} liveAnomalies={anomalies} onTriggerScenario={handleTriggerScenario} onResetSimulator={handleReset} />
+                  <DigitalTwinView view={activeTab as 'twin' | 'logs'} liveIncidents={incidents} companyMachines={machinesList} liveAnomalies={anomalies} onTriggerScenario={handleTriggerScenario} onResetSimulator={handleReset} onMachineAdded={handleExternalAddMachine} />
                 </motion.div>
               )}
 
@@ -1208,7 +1239,16 @@ export default function Dashboard() {
                                   <button
                                     className={`wo-action-btn ${isCompleted ? 'completed' : ''}`}
                                     title={isCompleted ? 'Mark as open' : 'Mark as done'}
-                                    onClick={() => isCompleted ? setCompletedWorkOrders(completedWorkOrders.filter(id => id !== wo.id)) : setCompletedWorkOrders([...completedWorkOrders, wo.id])}
+                                    onClick={async () => {
+                                      const newStatus = !isCompleted;
+                                      if (newStatus) {
+                                        await logWorkOrder('complete', wo.id);
+                                        setCompletedWorkOrders([...completedWorkOrders, wo.id]);
+                                      } else {
+                                        // Simple optimistic un-completion (would ideally need a backend undo endpoint, but for now just local state since backend persists completions)
+                                        setCompletedWorkOrders(completedWorkOrders.filter(id => id !== wo.id));
+                                      }
+                                    }}
                                   >
                                     <CheckCircle size={20} />
                                   </button>

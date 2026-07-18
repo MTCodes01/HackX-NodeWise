@@ -27,48 +27,53 @@ export default function IncidentPanel({
   state,
   liveIncidents = []
 }: IncidentPanelProps) {
-  const activeIncident = state.incidents.find(i => i.status !== 'resolved')
-    ?? state.incidents[state.incidents.length - 1]
-
-  const recommendation = activeIncident ? state.recommendations[activeIncident.id] : null
+  // Map the latest backend incident to the format expected by the UI
+  const rawIncident = liveIncidents && liveIncidents.length > 0 ? liveIncidents[liveIncidents.length - 1] : null;
+  
+  const activeIncident = rawIncident ? {
+    id: rawIncident.incident_id,
+    priority: rawIncident.priority.toLowerCase() as 'low'|'medium'|'high'|'critical',
+    status: 'active' as const,
+    title: rawIncident.detection_summary || 'Algorithmically Detected Incident',
+    machineId: rawIncident.asset,
+    lineId: rawIncident.line,
+    correlationScore: rawIncident.correlation_score,
+    createdAt: rawIncident.start_time,
+    evidence: rawIncident.verified_evidence.map((ev: any) => ({
+      domain: ev.domain,
+      label: ev.metric,
+      deviationPct: ev.deviation_pct
+    }))
+  } : null;
 
   const [liveRecommendation, setLiveRecommendation] = useState<any | null>(null)
   const [loadingLiveRecommendation, setLoadingLiveRecommendation] = useState(false)
 
   useEffect(() => {
-    if (!activeIncident || !liveIncidents || liveIncidents.length === 0) {
+    if (!activeIncident) {
       setLiveRecommendation(null)
       return
     }
 
-    // Match backend incident by asset name (machine ID)
-    const matchingBackendIncident = liveIncidents.find(
-      (inc: any) => inc.asset.toLowerCase() === activeIncident.machineId.toLowerCase()
-    )
-
-    if (matchingBackendIncident) {
-      const fetchRecommendation = async () => {
-        setLoadingLiveRecommendation(true)
-        try {
-          const res = await fetch(`http://localhost:8000/api/recommendations/${matchingBackendIncident.incident_id}`)
-          if (res.ok) {
-            const data = await res.json()
-            setLiveRecommendation(data)
-          } else {
-            setLiveRecommendation(null)
-          }
-        } catch (e) {
-          console.error("Failed to load Gemini recommendation in IncidentPanel:", e)
+    const fetchRecommendation = async () => {
+      setLoadingLiveRecommendation(true)
+      try {
+        const res = await fetch(`http://localhost:8000/api/recommendations/${activeIncident.id}`)
+        if (res.ok) {
+          const data = await res.json()
+          setLiveRecommendation(data)
+        } else {
           setLiveRecommendation(null)
-        } finally {
-          setLoadingLiveRecommendation(false)
         }
+      } catch (e) {
+        console.error("Failed to load Gemini recommendation in IncidentPanel:", e)
+        setLiveRecommendation(null)
+      } finally {
+        setLoadingLiveRecommendation(false)
       }
-      fetchRecommendation()
-    } else {
-      setLiveRecommendation(null)
     }
-  }, [activeIncident, liveIncidents])
+    fetchRecommendation()
+  }, [activeIncident?.id])
 
   return (
     <div className="incident-panel">
@@ -124,7 +129,7 @@ export default function IncidentPanel({
                     <Clock size={10} /> Created
                   </span>
                   <span className="incident-meta-val">
-                    {new Date(activeIncident.createdAt).toLocaleTimeString()}
+                    {activeIncident.createdAt}
                   </span>
                 </div>
               </div>
@@ -166,7 +171,7 @@ export default function IncidentPanel({
                 <span className="incident-algorithmic-badge">Detected algorithmically</span>
               </div>
               <div className="incident-evidence-list">
-                {activeIncident.evidence.map((ev, i) => (
+                {activeIncident.evidence.slice(-50).map((ev: any, i: number) => (
                   <div key={i} className="incident-evidence-row">
                     <div className="incident-evidence-meta">
                       <span className={`incident-evidence-domain domain-${ev.domain}`}>
@@ -193,7 +198,7 @@ export default function IncidentPanel({
 
             {/* Correlation Timeline */}
             <CorrelationTimeline
-              incidents={state.incidents}
+              incidents={liveIncidents}
               anomalies={state.anomalies}
               correlations={state.correlations}
             />
@@ -263,8 +268,6 @@ export default function IncidentPanel({
                   AI interpretation of algorithmically verified evidence. Not a substitute for qualified engineering judgment.
                 </div>
               </motion.div>
-            ) : recommendation ? (
-              <AIRecommendationPanel recommendation={recommendation} />
             ) : null}
           </motion.div>
         ) : (
@@ -284,16 +287,16 @@ export default function IncidentPanel({
       </AnimatePresence>
 
       {/* Past incidents */}
-      {state.incidents.filter(i => i.status === 'resolved').length > 0 && (
+      {liveIncidents.length > 1 && (
         <div className="past-incidents">
           <div className="past-incidents-title">Past Incidents</div>
-          {state.incidents.filter(i => i.status === 'resolved').map(i => (
-            <div key={i.id} className="past-incident-row">
+          {liveIncidents.slice(0, -1).map((i: any) => (
+            <div key={i.incident_id} className="past-incident-row">
               <CheckCircle size={11} style={{ color: '#10b981' }} />
-              <span className="past-incident-id">{i.id}</span>
-              <span className="past-incident-title">{i.title}</span>
+              <span className="past-incident-id">{i.incident_id}</span>
+              <span className="past-incident-title">{i.detection_summary}</span>
               <span className="past-incident-time">
-                {new Date(i.resolvedAt ?? i.createdAt).toLocaleTimeString()}
+                {i.start_time}
               </span>
             </div>
           ))}

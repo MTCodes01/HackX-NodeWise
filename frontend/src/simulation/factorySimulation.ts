@@ -10,9 +10,7 @@ import {
   computeMachineHealth, trimHistory
 } from './telemetryGenerator'
 import { getRecoveryProgress, RECOVERY_PROFILE_MAP } from './recoveryProfiles'
-import {
-  detectAnomalies, correlateAnomalies, createIncident, generateAIRecommendation
-} from './mockIntelligence'
+import { sendMachineTelemetry, sendEnergyTelemetry } from '../services/factoryApi'
 
 // ============================================================
 // useFactorySimulation — Central simulation state hook
@@ -105,6 +103,28 @@ export function useFactorySimulation() {
 
         const currentHistory = prev.telemetryHistory[machineId] ?? []
         updatedHistory[machineId] = trimHistory([...currentHistory, sample])
+
+        // Asynchronously send telemetry to the backend
+        const nowString = new Date(now).toISOString().substring(11, 19) // HH:MM:SS
+        sendMachineTelemetry({
+          timestamp: nowString,
+          machine_id: machineId,
+          line_id: machine.lineId,
+          vibration: sample.vibration,
+          temperature: sample.temperature,
+          rpm: sample.rpm,
+          status: status.toUpperCase()
+        }).catch(console.error)
+        
+        sendEnergyTelemetry({
+          timestamp: nowString,
+          meter_id: `METER-${machineId.toUpperCase()}`,
+          line_id: machine.lineId,
+          power_kw: sample.powerKw,
+          energy_kwh: sample.powerKw * 10, // Mocked cumulative
+          current: sample.powerKw / 8, // Mocked current
+          baseline_power: MACHINE_BASELINES[machineId] ? (MACHINE_BASELINES[machineId].powerMin + MACHINE_BASELINES[machineId].powerMax) / 2 : 95.0
+        }).catch(console.error)
       }
 
       // 2. Complete recoveries
@@ -125,81 +145,12 @@ export function useFactorySimulation() {
         completedRecoveryMachines.includes(f.machineId) ? { ...f, isActive: false } : f
       )
 
-      // 3. Anomaly Detection (only run every 3 ticks worth of data)
-      const existingAnomalyIds = new Set(prev.anomalies.map(a => a.id))
-      const newAnomalies = detectAnomalies(updatedMachines, updatedHistory, existingAnomalyIds)
-
-      const allAnomalies = [...prev.anomalies]
+      // 3. (Removed local anomaly detection, correlation, incidents. Backend handles this now.)
+      const resolvedAnomalies: Anomaly[] = []
+      const updatedCorrelations: any[] = []
+      const updatedIncidents: Incident[] = []
+      const updatedRecommendations: Record<string, any> = {}
       const newEvents: FactoryEvent[] = []
-
-      for (const anomaly of newAnomalies) {
-        allAnomalies.push(anomaly)
-        newEvents.push(makeEvent('anomaly',
-          `${anomaly.metric} anomaly on ${anomaly.machineId} — +${anomaly.deviation}% above baseline`,
-          anomaly.machineId
-        ))
-      }
-
-      // Deactivate anomalies whose machine has recovered
-      const resolvedAnomalies = allAnomalies.map(a => {
-        if (!a.isActive) return a
-        const machine = updatedMachines[a.machineId]
-        if (machine?.status === 'healthy' || machine?.status === 'recovering') {
-          return { ...a, isActive: false }
-        }
-        return a
-      })
-
-      // 4. Correlation (with cooldown to prevent spam)
-      let updatedCorrelations = [...prev.correlations]
-      let updatedIncidents = [...prev.incidents]
-      let updatedRecommendations = { ...prev.recommendations }
-
-      const canCorrelate = now - lastCorrelationAt.current > CORRELATION_COOLDOWN_MS
-      const activeAnomalyCount = resolvedAnomalies.filter(a => a.isActive).length
-      const hasActiveIncident = updatedIncidents.some(i => i.status === 'active')
-
-      if (canCorrelate && activeAnomalyCount >= 2 && !hasActiveIncident) {
-        const correlation = correlateAnomalies(resolvedAnomalies)
-        if (correlation) {
-          updatedCorrelations = [...updatedCorrelations, correlation]
-          lastCorrelationAt.current = now
-
-          newEvents.push(makeEvent('correlation',
-            `Cross-domain correlation detected — ${correlation.anomalyIds.length} anomalies linked (score: ${Math.round(correlation.score * 100)}%)`
-          ))
-
-          // Create incident
-          const existingIncidentIds = new Set(updatedIncidents.map(i => i.id))
-          const incident = createIncident(correlation, resolvedAnomalies, updatedMachines, existingIncidentIds)
-          if (incident) {
-            updatedIncidents = [...updatedIncidents, incident]
-            newEvents.push(makeEvent('incident',
-              `Incident ${incident.id} created — ${incident.title} [${incident.priority.toUpperCase()}]`,
-              incident.machineId
-            ))
-
-            // AI Recommendation
-            const rec = generateAIRecommendation(incident)
-            updatedRecommendations = { ...updatedRecommendations, [incident.id]: rec }
-            newEvents.push(makeEvent('ai', `AI recommendation generated for ${incident.id}`))
-          }
-        }
-      }
-
-      // 5. Resolve incidents when machine recovers
-      updatedIncidents = updatedIncidents.map(incident => {
-        if (incident.status === 'resolved') return incident
-        const machine = updatedMachines[incident.machineId]
-        if (machine?.status === 'recovering' && incident.status === 'active') {
-          return { ...incident, status: 'mitigating' as const }
-        }
-        if (machine?.status === 'healthy' && (incident.status === 'active' || incident.status === 'mitigating')) {
-          newEvents.push(makeEvent('operator', `Incident ${incident.id} resolved — machine back to healthy`))
-          return { ...incident, status: 'resolved' as const, resolvedAt: now }
-        }
-        return incident
-      })
 
       // 6. Compute factory intelligence score
       const machines = Object.values(updatedMachines)
