@@ -22,7 +22,15 @@ import type { FaultType, RecoveryType } from '../simulation/types'
 
 
 
-export default function DigitalTwinView({ view = 'twin', liveIncidents = [] }: { view?: 'twin' | 'logs'; liveIncidents?: any[] }) {
+export default function DigitalTwinView({ 
+  view = 'twin', 
+  liveIncidents = [],
+  sharedState
+}: { 
+  view?: 'twin' | 'logs'; 
+  liveIncidents?: any[];
+  sharedState?: any;
+}) {
   const [rightPanel, setRightPanel] = useState<'details' | 'incidents'>('details')
 
   // API recommendations for live twin page
@@ -53,6 +61,7 @@ export default function DigitalTwinView({ view = 'twin', liveIncidents = [] }: {
     }
   }, [activeLiveIncident])
 
+  const localSim = useFactorySimulation()
   const {
     state,
     injectFault,
@@ -63,7 +72,7 @@ export default function DigitalTwinView({ view = 'twin', liveIncidents = [] }: {
     resetFactory,
     runDemoScenario,
     addMachine,
-  } = useFactorySimulation()
+  } = sharedState || localSim
 
   const handleDropFault = (faultType: FaultType, machineId: string) => {
     injectFault(faultType, machineId)
