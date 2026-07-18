@@ -157,7 +157,7 @@ export default function Dashboard() {
                     <motion.div layoutId="sidebar-active" className="sidebar-active-bg" />
                   )}
                 </button>
-                <Link to="/" className="sidebar-link text-danger hover-bg-danger">
+                <Link to="/home" className="sidebar-link text-danger hover-bg-danger">
                   <LogOut size={18} />
                   <span>Logout</span>
                 </Link>
@@ -411,18 +411,7 @@ export default function Dashboard() {
                 </motion.div>
               )}
 
-              {(activeTab === 'twin' || activeTab === 'logs') && (
-                <motion.div
-                  key="twin"
-                  initial={{ opacity: 0, scale: 0.98 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.98 }}
-                  transition={{ duration: 0.3 }}
-                  style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%' }}
-                >
-                  <DigitalTwinView view={activeTab as 'twin' | 'logs'} />
-                </motion.div>
-              )}
+
 
               {/* ===== MACHINES ===== */}
               {activeTab === 'machines' && (
