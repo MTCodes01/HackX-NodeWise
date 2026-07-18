@@ -202,7 +202,7 @@ export default function DigitalTwinView({ view = 'twin', liveIncidents = [] }: {
                     <div style={{ background: 'var(--accent-primary)', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Cpu size={12} style={{ color: '#090d16' }} />
                     </div>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gemini AI Diagnosis</span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}> AI Diagnosis</span>
                   </div>
 
                   {loadingTwinRec ? (

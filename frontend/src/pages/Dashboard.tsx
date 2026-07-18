@@ -961,7 +961,7 @@ export default function Dashboard() {
                                   style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer' }}
                                 >
                                   <Cpu size={12} />
-                                  <span>Analyze Root-Cause (Gemini AI)</span>
+                                  <span>Analyze Root-Cause</span>
                                 </button>
                               </motion.div>
                             )
