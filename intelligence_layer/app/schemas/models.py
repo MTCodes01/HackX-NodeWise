@@ -1,4 +1,5 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
+from pydantic.alias_generators import to_camel
 from typing import List, Optional, Dict, Any
 
 # Raw Ingestion Models
@@ -64,10 +65,14 @@ class RecommendedAction(BaseModel):
     timeline: str
 
 class OperatorRecommendation(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True
+    )
     incident_id: str
     summary: str
     probable_causes: List[ProbableCause]
     recommended_actions: List[RecommendedAction]
     operator_explanation: str
     estimated_impact: str
-    limitations: str = "Recommendation is based on available incident evidence."
+    limitations: str

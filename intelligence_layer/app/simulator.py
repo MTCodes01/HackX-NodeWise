@@ -73,13 +73,14 @@ def simulate_tick(
     # Update db incidents
     db.incidents = updated_incidents
     
-    # 5. Generate recommendations for any newly updated/created incidents
-    for inc in db.incidents:
-        # If recommendation doesn't exist yet or the incident got updated with new evidence
-        rec = generate_operator_recommendation(inc)
-        db.recommendations[inc.incident_id] = rec
-        
     return new_anomalies, db.incidents
+
+def _generate_recommendations_for_active_incidents():
+    """Generates Gemini operator recommendations once at the end of simulation."""
+    for inc in db.incidents:
+        if inc.incident_id not in db.recommendations:
+            db.recommendations[inc.incident_id] = generate_operator_recommendation(inc)
+
 
 def run_mechanical_scenario() -> Dict[str, Any]:
     """
@@ -140,6 +141,7 @@ def run_mechanical_scenario() -> Dict[str, Any]:
         anoms, _ = simulate_tick(machine_tick, energy_tick)
         all_new_anomalies.extend(anoms)
         
+    _generate_recommendations_for_active_incidents()
     return {
         "status": "completed",
         "anomalies_detected": len(db.anomalies),
@@ -214,6 +216,7 @@ def run_safety_scenario() -> Dict[str, Any]:
             
         simulate_tick(machine_tick, energy_tick, vision_event)
         
+    _generate_recommendations_for_active_incidents()
     return {
         "status": "completed",
         "anomalies_detected": len(db.anomalies),
@@ -273,6 +276,7 @@ def run_false_spike_scenario() -> Dict[str, Any]:
     # Note: A single tick spike might create a minor incident or no persistent incident.
     # In our correlation engine, standalone high severity anomalies are created as separate low correlation incidents,
     # but we can verify their priority, counts, etc.
+    _generate_recommendations_for_active_incidents()
     return {
         "status": "completed",
         "anomalies_detected": len(db.anomalies),
