@@ -652,23 +652,67 @@ export default function Dashboard() {
                         <h3>Recent Activity</h3>
                       </div>
                       <div className="activity-feed" style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        {[
-                          { time: '10:42 AM', user: 'System', action: 'Automated backup completed successfully.', icon: Globe },
-                          { time: '09:15 AM', user: 'Admin User', action: 'Changed threshold limits for CNC-2.', icon: User },
-                          { time: 'Yesterday', user: 'Tech Team', action: 'Resolved maintenance ticket WO-8831.', icon: Wrench },
-                        ].map((act, i) => (
-                          <div key={i} style={{ display: 'flex', gap: '1rem', paddingBottom: '1rem', borderBottom: i !== 2 ? '1px solid var(--border-color)' : 'none' }}>
-                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', flexShrink: 0 }}>
-                              <act.icon size={16} />
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                              <div style={{ fontSize: '0.875rem', color: 'var(--text-main)' }}>
-                                <span style={{ fontWeight: 600 }}>{act.user}</span> {act.action}
-                              </div>
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{act.time}</span>
-                            </div>
-                          </div>
-                        ))}
+                        {incidents
+  .slice(0, 3)
+  .map((act, i) => (
+    <div
+      key={act.incident_id || i}
+      style={{
+        display: 'flex',
+        gap: '1rem',
+        paddingBottom: '1rem',
+        borderBottom:
+          i !== Math.min(incidents.length, 3) - 1
+            ? '1px solid var(--border-color)'
+            : 'none'
+      }}
+    >
+      <div
+        style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '50%',
+          background: 'var(--bg-secondary)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--text-muted)',
+          flexShrink: 0
+        }}
+      >
+        <AlertTriangle size={16} />
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.25rem'
+        }}
+      >
+        <div
+          style={{
+            fontSize: '0.875rem',
+            color: 'var(--text-main)'
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>
+            {act.asset}
+          </span>{" "}
+          {act.detection_summary}
+        </div>
+
+        <span
+          style={{
+            fontSize: '0.75rem',
+            color: 'var(--text-muted)'
+          }}
+        >
+          {act.start_time}
+        </span>
+      </div>
+    </div>
+))}
                       </div>
                     </motion.div>
                   </div>
