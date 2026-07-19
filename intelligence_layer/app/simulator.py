@@ -55,31 +55,35 @@ def simulate_tick(
         new_anomalies.append(vision_anom)
         
     # Append detected anomalies to database
-    for anom in new_anomalies:
-        db.anomalies.append(anom)
+    db.add_anomalies(new_anomalies)
         
     # 4. Run Correlation Engine
     # Get currently uncorrelated anomalies from db (anomalies not in any incident evidence)
-    correlated_ids = {ev.anomaly_id for inc in db.incidents for ev in inc.verified_evidence}
-    uncorrelated_anomalies = [a for a in db.anomalies if a.anomaly_id not in correlated_ids]
+    current_incidents = db.get_incidents()
+    current_anomalies = db.get_anomalies()
+    correlated_ids = {ev.anomaly_id for inc in current_incidents for ev in inc.verified_evidence}
+    uncorrelated_anomalies = [a for a in current_anomalies if a.anomaly_id not in correlated_ids]
     
     # Run correlation
     updated_incidents, uncorrelated_rem = correlate_anomalies(
         new_anomalies=new_anomalies,
-        existing_incidents=db.incidents,
+        existing_incidents=current_incidents,
         all_uncorrelated_anomalies=uncorrelated_anomalies
     )
     
     # Update db incidents
-    db.incidents = updated_incidents
+    db.update_incidents(updated_incidents)
     
-    return new_anomalies, db.incidents
+    return new_anomalies, updated_incidents
 
 def _generate_recommendations_for_active_incidents():
     """Generates Gemini operator recommendations once at the end of simulation."""
-    for inc in db.incidents:
-        if inc.incident_id not in db.recommendations:
-            db.recommendations[inc.incident_id] = generate_operator_recommendation(inc)
+    current_incidents = db.get_incidents()
+    current_recs = db.get_recommendations()
+    for inc in current_incidents:
+        if inc.incident_id not in current_recs:
+            rec = generate_operator_recommendation(inc)
+            db.add_recommendation(inc.incident_id, rec)
 
 
 def run_mechanical_scenario(machine_id: str = "CNC-04") -> Dict[str, Any]:

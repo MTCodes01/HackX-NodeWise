@@ -20,7 +20,7 @@ function noise(range: number): number {
   return (Math.random() - 0.5) * 2 * range
 }
 
-/** Generate a clean baseline reading for a machine */
+/** Generate a clean baseline reading for a machine using time-based smooth oscillations */
 export function generateBaseline(machineId: string): TelemetrySample {
   const b: MachineBaseline = MACHINE_BASELINES[machineId] ?? {
     vibrationMin: 1, vibrationMax: 3,
@@ -28,12 +28,31 @@ export function generateBaseline(machineId: string): TelemetrySample {
     rpmMin: 1000, rpmMax: 2000,
     powerMin: 5, powerMax: 15,
   }
+  
+  const now = Date.now()
+  // Pseudo-random phase offset for this machine
+  const hash = machineId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  
+  // Different frequencies for different metrics
+  const t1 = (now / 35000) + hash
+  const t2 = (now / 50000) + hash * 2
+  const t3 = (now / 25000) + hash * 3
+  
+  // Smoothly vary around the middle of the baseline range (only +-15% of the total range)
+  const mid = (min: number, max: number) => (min + max) / 2;
+  const vary = (min: number, max: number, t: number) => mid(min, max) + Math.sin(t) * ((max - min) * 0.15);
+  
+  const v = vary(b.vibrationMin, b.vibrationMax, t1)
+  const temp = vary(b.temperatureMin, b.temperatureMax, t2)
+  const r = vary(b.rpmMin, b.rpmMax, t3)
+  const p = vary(b.powerMin, b.powerMax, t1 * 1.3)
+
   return {
-    timestamp: Date.now(),
-    vibration: parseFloat(rand(b.vibrationMin, b.vibrationMax).toFixed(2)),
-    temperature: parseFloat(rand(b.temperatureMin, b.temperatureMax).toFixed(1)),
-    rpm: Math.round(rand(b.rpmMin, b.rpmMax)),
-    powerKw: parseFloat(rand(b.powerMin, b.powerMax).toFixed(2)),
+    timestamp: now,
+    vibration: parseFloat((v + noise(0.05)).toFixed(2)),
+    temperature: parseFloat((temp + noise(0.2)).toFixed(1)),
+    rpm: Math.round(r + noise(5)),
+    powerKw: parseFloat((p + noise(0.1)).toFixed(2)),
   }
 }
 
@@ -129,18 +148,20 @@ export function computeMachineHealth(
   if (recoveryProgress > 0 && recoveryProgress < 1) {
     status = 'recovering'
     healthScore = Math.round(50 + recoveryProgress * 47)
-  } else if (deviation > 2.2) {
-    status = 'critical'
-    healthScore = Math.round(Math.max(10, 100 - (deviation - 1) * 40))
-  } else if (deviation > 1.4) {
-    status = 'warning'
-    healthScore = Math.round(Math.max(30, 100 - (deviation - 1) * 30))
-  } else if (hasActiveFault && deviation <= 1.1) {
-    status = 'warning'
-    healthScore = 80
+  } else if (hasActiveFault) {
+    // Only enter warning or critical if there is an active fault
+    if (deviation > 1.8) {
+      status = 'critical'
+      healthScore = Math.round(Math.max(10, 100 - (deviation - 1) * 40))
+    } else {
+      status = 'warning'
+      // Ensure health score drops below 90 quickly when a fault is applied
+      healthScore = Math.round(Math.max(30, 85 - (deviation - 1) * 20))
+    }
   } else {
     status = 'healthy'
-    healthScore = Math.round(Math.min(100, 100 - (deviation - 1) * 20))
+    // Keep health score high and stable during normal baseline operations (between 92-100)
+    healthScore = Math.round(Math.min(100, Math.max(92, 100 - Math.abs(deviation - 1) * 12)))
   }
 
   return { status, healthScore }

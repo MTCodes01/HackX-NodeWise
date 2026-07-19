@@ -82,7 +82,7 @@ async def websocket_telemetry(websocket: WebSocket):
             if payload_type == "machine":
                 telemetry = MachineTelemetry(**payload)
                 data_dict = telemetry.model_dump()
-                latest_energy_list = [h[-1] for h in db.energy_history.values() if h]
+                latest_energy_list = db.get_latest_energy_telemetry()
                 if latest_energy_list:
                     matching = [e for e in latest_energy_list if e.line_id == telemetry.line_id]
                     energy_data = (matching[0] if matching else latest_energy_list[0]).model_dump()
@@ -101,7 +101,7 @@ async def websocket_telemetry(websocket: WebSocket):
             elif payload_type == "energy":
                 telemetry = EnergyTelemetry(**payload)
                 data_dict = telemetry.model_dump()
-                latest_machine_list = [h[-1] for h in db.machine_history.values() if h]
+                latest_machine_list = db.get_latest_machine_telemetry()
                 if latest_machine_list:
                     matching = [m for m in latest_machine_list if m.line_id == telemetry.line_id]
                     machine_data = (matching[0] if matching else latest_machine_list[0]).model_dump()
@@ -121,8 +121,8 @@ async def websocket_telemetry(websocket: WebSocket):
             # The dashboard expects anomalies and incidents
             await websocket.send_json({
                 "type": "update",
-                "anomalies": [a.model_dump() for a in db.anomalies],
-                "incidents": [i.model_dump() for i in db.incidents]
+                "anomalies": [a.model_dump() for a in db.get_anomalies()],
+                "incidents": [i.model_dump() for i in db.get_incidents()]
             })
             
     except WebSocketDisconnect:
@@ -142,12 +142,7 @@ def ingest_machine(telemetry: MachineTelemetry):
         data_dict = telemetry.model_dump()
         
         # We need energy data for simulate_tick, or we use a fallback if not ingested yet
-        # Since we simulate tick-by-tick, we can fetch the latest energy reading from DB
-        # or create a mock normal reading if none exists.
-        latest_energy_list = []
-        for meter_id, hist in db.energy_history.items():
-            if hist:
-                latest_energy_list.append(hist[-1])
+        latest_energy_list = db.get_latest_energy_telemetry()
                 
         if latest_energy_list:
             # Match by line_id if possible
@@ -185,10 +180,7 @@ def ingest_energy(telemetry: EnergyTelemetry):
         data_dict = telemetry.model_dump()
         
         # Match with latest machine reading
-        latest_machine_list = []
-        for machine_id, hist in db.machine_history.items():
-            if hist:
-                latest_machine_list.append(hist[-1])
+        latest_machine_list = db.get_latest_machine_telemetry()
                 
         if latest_machine_list:
             matching = [m for m in latest_machine_list if m.line_id == telemetry.line_id]
@@ -223,10 +215,7 @@ def ingest_vision(event: VisionEvent):
     try:
         # Create normal telemetry to simulate a tick
         # Match with latest machine/energy readings
-        latest_machine_list = []
-        for machine_id, hist in db.machine_history.items():
-            if hist:
-                latest_machine_list.append(hist[-1])
+        latest_machine_list = db.get_latest_machine_telemetry()
                 
         if latest_machine_list:
             matching = [m for m in latest_machine_list if m.machine_id == event.nearby_machine_id]
@@ -242,10 +231,7 @@ def ingest_vision(event: VisionEvent):
                 "status": "OPERATIONAL"
             }
             
-        latest_energy_list = []
-        for meter_id, hist in db.energy_history.items():
-            if hist:
-                latest_energy_list.append(hist[-1])
+        latest_energy_list = db.get_latest_energy_telemetry()
                 
         if latest_energy_list:
             matching = [e for e in latest_energy_list if e.line_id == event.line_id]
@@ -330,14 +316,15 @@ async def upload_frame(
 @app.get("/api/anomalies", response_model=List[AnomalyEvidence])
 def get_anomalies(domain: Optional[str] = None):
     """Returns all logged anomalies, optionally filtered by domain."""
+    anomalies = db.get_anomalies()
     if domain:
-        return [a for a in db.anomalies if a.domain == domain]
-    return db.anomalies
+        return [a for a in anomalies if a.domain == domain]
+    return anomalies
 
 @app.get("/api/incidents", response_model=List[UnifiedIncident])
 def get_incidents():
     """Returns all generated incidents."""
-    return db.incidents
+    return db.get_incidents()
 
 @app.get("/api/incidents/machine/{machine_id}", response_model=List[UnifiedIncident])
 def get_incidents_by_machine(machine_id: str):
@@ -346,7 +333,8 @@ def get_incidents_by_machine(machine_id: str):
     Used by the frontend machine modal to show per-machine maintenance history
     and to pre-filter the Maintenance tab view.
     """
-    matching = [inc for inc in db.incidents if inc.asset.lower() == machine_id.lower()]
+    incidents = db.get_incidents()
+    matching = [inc for inc in incidents if inc.asset.lower() == machine_id.lower()]
     return matching
 
 @app.get("/api/recommendations/{incident_id}", response_model=OperatorRecommendation)
@@ -356,19 +344,21 @@ def get_recommendation(incident_id: str):
     If cached, returns it; otherwise, requests it from Gemini.
     """
     # Find incident in DB
-    matching = [inc for inc in db.incidents if inc.incident_id == incident_id]
+    incidents = db.get_incidents()
+    matching = [inc for inc in incidents if inc.incident_id == incident_id]
     if not matching:
         raise HTTPException(status_code=404, detail="Incident not found.")
         
     incident = matching[0]
     
     # Check if recommendation is already cached
-    if incident_id in db.recommendations:
-        return db.recommendations[incident_id]
+    recs = db.get_recommendations()
+    if incident_id in recs:
+        return recs[incident_id]
         
     # Generate new recommendation
     rec = generate_operator_recommendation(incident)
-    db.recommendations[incident_id] = rec
+    db.add_recommendation(incident_id, rec)
     return rec
 
 @app.post("/api/simulator/trigger", response_model=Dict[str, Any])
@@ -417,7 +407,7 @@ def get_system_state():
 @app.post("/api/machines", response_model=Dict[str, Any])
 def add_machine(machine: Dict[str, Any]):
     """Registers a new machine in the UI state."""
-    db.ui_machines.append(machine)
+    db.add_ui_machine(machine)
     return {"status": "success", "machine": machine}
 
 @app.post("/api/maintenance/work-order", response_model=Dict[str, Any])
@@ -426,7 +416,7 @@ def handle_work_order(payload: Dict[str, Any]):
     action = payload.get("action")
     data = payload.get("data")
     if action == "create":
-        db.ui_created_work_orders.append(data)
+        db.add_ui_created_work_order(data)
     elif action == "complete":
-        db.ui_completed_work_orders.append(data)
+        db.add_ui_completed_work_order(data)
     return {"status": "success"}
