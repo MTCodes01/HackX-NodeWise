@@ -1,0 +1,17 @@
+path: dataset
+
+train: train/images
+val: valid/images
+test: test/images
+
+names:
+  0: Person
+  1: boots
+  2: gloves
+  3: goggles
+  4: helmet
+  5: no_gloves
+  6: no_goggle
+  7: no_helmet
+  8: none
+  9: vest

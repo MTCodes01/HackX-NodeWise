@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Ultralytics / YOLO training outputs
+runs/
+weights/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.mlmodel
+*.cache
+
+*.jpg
+*.txt
+*.mp4
+
+# Local OS files
+.DS_Store
+Thumbs.db
