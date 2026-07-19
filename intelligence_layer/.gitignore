@@ -157,3 +157,6 @@ Desktop.ini
 # Downloaded ML/YOLO model files
 *.pt
 *.onnx
+
+# Database files
+*.db
