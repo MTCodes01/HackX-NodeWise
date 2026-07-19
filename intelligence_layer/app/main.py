@@ -407,7 +407,11 @@ def get_system_state():
     return {
         "machines": db.ui_machines,
         "created_work_orders": db.ui_created_work_orders,
-        "completed_work_orders": db.ui_completed_work_orders
+        "completed_work_orders": db.ui_completed_work_orders,
+        "kpis": db.ui_kpis,
+        "production_output": db.ui_production_output,
+        "system_health": db.ui_system_health,
+        "recent_activity": db.ui_recent_activity
     }
 
 @app.post("/api/machines", response_model=Dict[str, Any])
